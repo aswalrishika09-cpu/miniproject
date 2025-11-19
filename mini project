@@ -1,0 +1,303 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+// Use preprocessor directives for cross-platform compatibility
+#ifdef _WIN32
+#include <windows.h>
+#define SLEEP(milliseconds) Sleep(milliseconds)
+#else
+#include <unistd.h>
+#define SLEEP(milliseconds) usleep(milliseconds * 1000)
+#endif
+
+// Constants for the simulation
+#define MAX_DRONES 10
+#define MISSION_DURATION_SECONDS 15
+#define BATTERY_DRAIN_PER_SECOND 2
+#define UPDATE_INTERVAL_MS 1000 // 1 second
+
+// --- Enums and Structs ---
+
+// Enum for the drone's operational status
+typedef enum {
+    OFFLINE,
+    IDLE,
+    IN_MISSION,
+    RETURNING
+} DroneStatus;
+
+// Enum for the type of mission
+typedef enum {
+    SEARCH_AND_RESCUE,
+    DELIVERY,
+    SURVEY,
+    NO_MISSION
+} MissionType;
+
+// Structure to hold mission details
+typedef struct {
+    MissionType type;
+    int duration_sec;
+    char target[50];
+} Mission;
+
+// Structure to represent a single drone
+typedef struct {
+    int id;
+    DroneStatus status;
+    int battery_level; // 0-100
+    float location_x;
+    float location_y;
+    Mission current_mission;
+} Drone;
+
+// Global array of drones
+Drone drones[MAX_DRONES];
+
+// --- Function Prototypes ---
+void init_drones();
+void print_menu();
+void connect_drone(int drone_id);
+void assign_mission(int drone_id, MissionType type, const char* target);
+void display_drone_status();
+void update_drone_state();
+char* get_status_string(DroneStatus status);
+char* get_mission_string(MissionType type);
+
+// --- Main Function ---
+
+int main() {
+    int choice;
+    int drone_id;
+    int mission_type_choice;
+    char target[50];
+
+    // Seed the random number generator
+    srand(time(NULL));
+
+    // Initialize all drones to a default state
+    init_drones();
+
+    printf("--- Disaster Response Drone Ground Control Station Simulation ---\n");
+    printf("Welcome to the GCS. You can manage a fleet of up to %d drones.\n\n", MAX_DRONES);
+
+    while (1) {
+        update_drone_state();
+        print_menu();
+
+        printf("Enter your choice: ");
+        if (scanf("%d", &choice) != 1) {
+            printf("Invalid input. Please enter a number.\n");
+            while (getchar() != '\n'); // Clear the input buffer
+            SLEEP(1000);
+            continue;
+        }
+
+        switch (choice) {
+            case 1:
+                printf("Enter Drone ID to connect (1-%d): ", MAX_DRONES);
+                if (scanf("%d", &drone_id) != 1 || drone_id < 1 || drone_id > MAX_DRONES) {
+                    printf("Invalid Drone ID.\n");
+                } else {
+                    connect_drone(drone_id);
+                }
+                break;
+            case 2:
+                printf("Enter Drone ID to assign a mission (1-%d): ", MAX_DRONES);
+                if (scanf("%d", &drone_id) != 1 || drone_id < 1 || drone_id > MAX_DRONES) {
+                    printf("Invalid Drone ID.\n");
+                    break;
+                }
+                printf("Select Mission Type:\n");
+                printf("1. Search and Rescue\n");
+                printf("2. Delivery\n");
+                printf("3. Survey\n");
+                printf("Enter mission choice: ");
+                if (scanf("%d", &mission_type_choice) != 1 || mission_type_choice < 1 || mission_type_choice > 3) {
+                    printf("Invalid mission type.\n");
+                    break;
+                }
+                printf("Enter mission target/location: ");
+                scanf("%s", target);
+                assign_mission(drone_id, mission_type_choice, target);
+                break;
+            case 3:
+                display_drone_status();
+                break;
+            case 4:
+                printf("Exiting GCS. Goodbye!\n");
+                return 0;
+            default:
+                printf("Invalid choice. Please try again.\n");
+                break;
+        }
+
+        printf("\n");
+        SLEEP(1000); // Wait for a second before showing the menu again
+    }
+
+    return 0;
+}
+
+// --- Function Implementations ---
+
+/**
+ * @brief Initializes all drones in the fleet.
+ * Sets their status to OFFLINE and all other properties to default values.
+ */
+void init_drones() {
+    for (int i = 0; i < MAX_DRONES; i++) {
+        drones[i].id = i + 1;
+        drones[i].status = OFFLINE;
+        drones[i].battery_level = 0;
+        drones[i].location_x = 0.0;
+        drones[i].location_y = 0.0;
+        drones[i].current_mission.type = NO_MISSION;
+        strcpy(drones[i].current_mission.target, "N/A");
+    }
+}
+
+/**
+ * @brief Prints the main menu of the GCS.
+ */
+void print_menu() {
+    printf("--- GCS Menu ---\n");
+    printf("1. Connect a Drone\n");
+    printf("2. Assign a Mission\n");
+    printf("3. Display All Drone Status\n");
+    printf("4. Exit\n");
+}
+
+/**
+ * @brief Connects a drone to the GCS.
+ * Changes the drone's status from OFFLINE to IDLE.
+ *
+ * @param drone_id The ID of the drone to connect.
+ */
+void connect_drone(int drone_id) {
+    Drone* drone = &drones[drone_id - 1];
+    if (drone->status == OFFLINE) {
+        drone->status = IDLE;
+        drone->battery_level = 100 - (rand() % 10); // Start with a high battery
+        printf("Drone %d connected and is ready for a mission.\n", drone->id);
+    } else {
+        printf("Drone %d is already %s.\n", drone->id, get_status_string(drone->status));
+    }
+}
+
+/**
+ * @brief Assigns a mission to an IDLE drone.
+ *
+ * @param drone_id The ID of the drone.
+ * @param type The type of mission to assign.
+ * @param target The target/location for the mission.
+ */
+void assign_mission(int drone_id, MissionType type, const char* target) {
+    Drone* drone = &drones[drone_id - 1];
+    if (drone->status == IDLE) {
+        drone->status = IN_MISSION;
+        drone->current_mission.type = type;
+        drone->current_mission.duration_sec = MISSION_DURATION_SECONDS;
+        strcpy(drone->current_mission.target, target);
+        printf("Drone %d assigned a mission: %s to %s.\n", drone->id, get_mission_string(type), target);
+    } else {
+        printf("Drone %d is not available for a mission. Status: %s.\n", drone->id, get_status_string(drone->status));
+    }
+}
+
+/**
+ * @brief Displays the status of all drones in a table format.
+ */
+void display_drone_status() {
+    printf("--------------------------------------------------------------------------------------------------------\n");
+    printf("| ID | Status      | Battery | Location (x, y) | Current Mission                                 |\n");
+    printf("-------------------------------------------------------------------------------------------------------\n");
+    for (int i = 0; i < MAX_DRONES; i++) {
+        Drone* d = &drones[i];
+        printf("| %-2d | %-11s | %-3d%%    | (%6.1f, %6.1f) | %-45s |\n",
+               d->id,
+               get_status_string(d->status),
+               d->battery_level,
+               d->location_x,
+               d->location_y,
+               d->status == IN_MISSION ? d->current_mission.target : get_mission_string(d->current_mission.type));
+    }
+    printf("---------------------------------------------------------------------------------------------------\n");
+}
+
+/**
+ * @brief Updates the state of all drones in the simulation.
+ * This function simulates battery drain, movement, and mission completion.
+ */
+void update_drone_state() {
+    for (int i = 0; i < MAX_DRONES; i++) {
+        Drone* d = &drones[i];
+        if (d->status == IN_MISSION) {
+            d->battery_level -= BATTERY_DRAIN_PER_SECOND;
+            d->current_mission.duration_sec--;
+
+            // Simulate movement
+            d->location_x += (float)(rand() % 100) / 100.0 - 0.5;
+            d->location_y += (float)(rand() % 100) / 100.0 - 0.5;
+
+            // Check if mission is complete
+            if (d->current_mission.duration_sec <= 0 || d->battery_level <= 20) {
+                printf("Drone %d is returning to base. Mission complete or low battery.\n", d->id);
+                d->status = RETURNING;
+            }
+        } else if (d->status == RETURNING) {
+            d->battery_level -= BATTERY_DRAIN_PER_SECOND;
+
+            // Simulate returning to home base (0,0)
+            if (d->location_x > 0.0) d->location_x -= 0.5;
+            if (d->location_y > 0.0) d->location_y -= 0.5;
+            if (d->location_x < 0.0) d->location_x += 0.5;
+            if (d->location_y < 0.0) d->location_y += 0.5;
+
+            // Check if returned to base
+            if (d->location_x < 0.5 && d->location_x > -0.5 &&
+                d->location_y < 0.5 && d->location_y > -0.5) {
+                printf("Drone %d has returned to base and is idle.\n", d->id);
+                d->status = IDLE;
+                d->location_x = 0.0;
+                d->location_y = 0.0;
+                d->current_mission.type = NO_MISSION;
+                strcpy(d->current_mission.target, "N/A");
+            }
+        }
+    }
+}
+
+/**
+ * @brief Returns a string representation of the drone's status.
+ *
+ * @param status The DroneStatus enum value.
+ * @return A string literal.
+ */
+char* get_status_string(DroneStatus status) {
+    switch (status) {
+        case OFFLINE: return "OFFLINE";
+        case IDLE: return "IDLE";
+        case IN_MISSION: return "IN_MISSION";
+        case RETURNING: return "RETURNING";
+    }
+    return "UNKNOWN";
+}
+
+/**
+ * @brief Returns a string representation of the mission type.
+ *
+ * @param type The MissionType enum value.
+ * @return A string literal.
+ */
+char* get_mission_string(MissionType type) {
+    switch (type) {
+        case SEARCH_AND_RESCUE: return "Search & Rescue";
+        case DELIVERY: return "Delivery";
+        case SURVEY: return "Survey";
+        case NO_MISSION: return "No Mission";
+    }
+    return "UNKNOWN";
+}
