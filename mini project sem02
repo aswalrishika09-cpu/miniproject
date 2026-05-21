@@ -1,0 +1,105 @@
+
+#include <stdio.h>
+#include <string.h>
+#include <time.h> 
+
+// Essential for the 'History Book' feature
+
+// --- Diagnostic Report & Logging System ---
+void print_report(float score, float max, char* type, char* why) 
+{
+    float percentage = (score / max) * 100;
+    if (percentage > 100) percentage = 100;
+
+    // Determine Verdict
+    char verdict[50];
+    if (percentage == 0) strcpy(verdict, "CLEAN");
+    else if (percentage > 60) strcpy(verdict, "CRITICAL");
+    else strcpy(verdict, "SUSPICIOUS");
+
+    // Get current time safely
+    time_t now;
+    time(&now);
+    char *timestamp = ctime(&now);
+    if (timestamp) timestamp[strlen(timestamp) - 1] = '\0'; // Remove the annoying extra line
+
+    // 1. Display on Screen
+    printf("\n--- ANALYSIS REPORT ---");
+    printf("\n[!] Time: %s", timestamp);
+    printf("\n[!] Risk Level: %.1f%%", percentage);
+    printf("\n[!] Attack Type: %s", type);
+    printf("\n[!] Reasoning: %s", why);
+    printf("\n[!] VERDICT: %s", verdict);
+    printf("\n-----------------------\n");
+
+    // 2. The History Book (Save to security_log.txt)
+    FILE *file = fopen("security_log.txt", "a");
+    if (file != NULL) {
+        fprintf(file, "[%s] TYPE: %s | RISK: %.1f%% | VERDICT: %s\n", 
+                timestamp, type, percentage, verdict);
+        fclose(file);
+        printf("(Report saved to security_log.txt)\n");
+    }
+}
+// --- URL MODULE ---
+void analyze_url() {
+    char url[256];
+    float score = 0;
+    char why[250] = "";
+    printf("\nEnter URL to scan: ");
+    scanf("%s", url);
+
+    if (strstr(url, "https://") == NULL) { score += 2.0; strcat(why, "No HTTPS. "); }
+
+  if (strchr(url, '@') != NULL) { score += 3.0; strcat(why, "Redirection '@' found. "); }
+    if (strstr(url, ".xyz") || strstr(url, ".zip")) { score += 2.0; strcat(why, "Risky TLD. "); }
+
+    print_report(score, 7.0, "Phishing Link", why);
+}
+
+// --- EMAIL MODULE ---
+void analyze_email() {
+    char sender[100], body[500];
+    float score = 0;
+    char why[250] = "";
+
+    printf("\nEnter Sender Email: ");
+    scanf("%s", sender);
+    printf("Enter Email Body Snippet: ");
+    getchar(); // Clear buffer
+    fgets(body, 500, stdin);
+
+    if (strstr(sender, "@gmail") || strstr(sender, "@yahoo")) { score += 3.0; strcat(why, "Public email for brand. "); }
+    if (strstr(body, "urgent") || strstr(body, "suspended")) { score += 3.0; strcat(why, "Urgency tactics. "); }
+
+    print_report(score, 6.0, "Social Engineering", why);
+}
+
+// --- APP MODULE ---
+
+void analyze_app() {
+    int sms, side;
+    float score = 0;
+    char why[250] = "";
+
+    printf("\nDoes app ask for SMS permissions? (1-Yes, 0-No): ");
+    scanf("%d", &sms);
+    printf("Is it from an unofficial source? (1-Yes, 0-No): ");
+scanf("%d", &side);
+
+    if (sms) { score += 5.0; strcat(why, "SMS access risk. "); }
+    if (side) { score += 3.0; strcat(why, "Sideloaded malware risk. "); }
+
+    print_report(score, 8.0, "Malware Fraud", why);
+}
+
+int main() {
+    int choice;
+    while(1) {
+        printf("\n1. URL Scan | 2. Email Scan | 3. App Scan | 4. Exit\nSelection: ");
+        if (scanf("%d", &choice) != 1) break;
+        if (choice == 1) analyze_url();
+        else if (choice == 2) analyze_email();
+        else if (choice == 3) analyze_app();
+        else break;}
+       return 0; }
